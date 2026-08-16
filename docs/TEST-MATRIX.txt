@@ -1,0 +1,9 @@
+Bubble Bobble 1.0.0 test matrix
+
+password-level01-headed-graphics through password-level20-headed-graphics: enter the documented password using normal controller input, create an actual headed window, capture the visible window at frame 2800, and require the reported round to match.
+
+headed-rounds-1-to-20-verification: requires 20 actual X11 windows, 20 generated/headed pairs, exact 3x nearest-neighbor parity, 20 unique visible stage frames, and zero runtime fetch/decode/fallback/error counters.
+
+password-level01-complete through password-level10-complete remain active completion routes. Round 99/A0 entry, item, audio, snapshot, whole-ROM, semantic-data, and static-provenance gates remain active.
+
+Online screenshot comparison is representative corroboration only. Exact visual proof uses the game-generated framebuffer and the actual headed-window pixels.

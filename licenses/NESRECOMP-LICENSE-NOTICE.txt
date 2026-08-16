@@ -1,0 +1,6 @@
+NESRecomp commit 513ddb193f09e55e57b536e225a9fc144b09f1d9 is licensed under the PolyForm Noncommercial License 1.0.0, copyright 2026 Matthew Stan.
+
+The complete licence must be preserved when the pinned upstream checkout is materialized. Official licence text:
+https://polyformproject.org/licenses/noncommercial/1.0.0
+
+This package does not redistribute an incomplete or complete NESRecomp source tree. It records the exact pin and uses project-specific generated-semantic and native-runtime code.

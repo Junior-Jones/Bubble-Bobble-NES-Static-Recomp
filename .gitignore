@@ -1,0 +1,26 @@
+build/
+out/
+.vs/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+*.sln
+*.vcxproj*
+*.exe
+*.dll
+*.lib
+*.obj
+*.pdb
+*.ilk
+*.nes
+*.zip
+*.bbs
+*.wav
+*.bmp
+*.png
+Logs/
+Screenshots/
+Snapshots/
+Music Box/
+
