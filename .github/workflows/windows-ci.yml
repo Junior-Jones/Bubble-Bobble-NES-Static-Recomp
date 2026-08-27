@@ -21,8 +21,11 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Preserve committed line endings
+        run: git config --global core.autocrlf false
+
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Configure Visual Studio 2022 x64
         run: cmake -S . -B build-ci -G "Visual Studio 17 2022" -A x64
@@ -32,4 +35,3 @@ jobs:
 
       - name: Run ROM-free tests
         run: ctest --test-dir build-ci -C Release --output-on-failure
-
