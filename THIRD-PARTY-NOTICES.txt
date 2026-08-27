@@ -1,0 +1,17 @@
+Third-Party Notices
+===================
+
+SDL_GameControllerDB
+--------------------
+Component: third_party/gamecontrollerdb.txt
+Upstream: https://github.com/mdqinc/SDL_GameControllerDB
+License: zlib
+License text: third_party/SDL_GameControllerDB-LICENSE.txt
+
+The controller mapping database is a vendored upstream snapshot. The exact
+upstream revision was not recorded when it was imported. This project does not
+claim authorship of it. Any differences from the current upstream database must
+be treated as local modifications rather than represented as upstream work.
+
+Runtime packages place the database beside Launcher.exe as gamecontrollerdb.txt
+and include its license as SDL_GameControllerDB-LICENSE.txt.

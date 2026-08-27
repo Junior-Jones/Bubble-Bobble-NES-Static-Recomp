@@ -204,6 +204,12 @@ if(WIN32)
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
       "${CMAKE_SOURCE_DIR}/third_party/gamecontrollerdb.txt"
       "$<TARGET_FILE_DIR:BubbleBobbleLauncher>/gamecontrollerdb.txt"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/third_party/SDL_GameControllerDB-LICENSE.txt"
+      "$<TARGET_FILE_DIR:BubbleBobbleLauncher>/SDL_GameControllerDB-LICENSE.txt"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/THIRD-PARTY-NOTICES.txt"
+      "$<TARGET_FILE_DIR:BubbleBobbleLauncher>/THIRD-PARTY-NOTICES.txt"
     VERBATIM)
 endif()
 enable_testing()
