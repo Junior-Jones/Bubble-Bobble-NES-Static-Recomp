@@ -19,8 +19,9 @@ CTestTestfile.cmake
 *.wav
 *.bmp
 *.png
+settings.ini
 Logs/
-Screenshots/
+Screenshots/*
+!Screenshots/Readme.txt
 Snapshots/
 Music Box/
-

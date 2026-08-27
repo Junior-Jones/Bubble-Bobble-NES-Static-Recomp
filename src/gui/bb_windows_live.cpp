@@ -6,12 +6,8 @@
 
 #include "bb_audio_output_sdl3.h"
 extern "C" {
-#include "bb_audio_queue.h"
-#include "bb_audio_replacement.h"
-#include "bb_generated_semantics.h"
-#include "bb_renderer.h"
-#include "bb_rom.h"
-#include "bb_snapshot.h"
+#include "bb_bmp_writer.h"
+#include "bb_static_core.h"
 }
 #include "bb_video_output_sdl3.h"
 
@@ -39,27 +35,23 @@ constexpr uint8_t kNesLeft = 0x40u;
 constexpr uint8_t kNesRight = 0x80u;
 
 struct BBLiveWindow {
-    BBRom rom{};
-    BBRuntime runtime{};
-    BBAudioQueue audio_queue{};
-    BBAudioReplacementState replacements{};
+    BBStaticCore *core{};
     BBAudioOutput audio_output{};
     BBVideoOutput video_output{};
     std::vector<unsigned char> rgba;
     std::array<SDL_Gamepad *, 2> gamepads{};
+    std::array<unsigned char, 2> gamepad_axis_masks{};
     BBLiveSettings settings{};
     unsigned char keyboard_p1{};
     unsigned char keyboard_p2{};
     unsigned char keyboard_pressed_p1{};
     unsigned char keyboard_pressed_p2{};
     bool paused{};
-    bool fullscreen{};
     bool gamepad_initialized{};
     bool core_failure_reported{};
     LARGE_INTEGER performance_frequency{};
     double next_frame_tick{};
     HANDLE frame_timer{};
-    WINDOWPLACEMENT placement{sizeof(WINDOWPLACEMENT)};
     HWND hwnd{};
     HWND owner{};
 };
@@ -81,16 +73,6 @@ std::string utf8(const wchar_t *text) {
     return result;
 }
 
-std::wstring widen_utf8(const char *text) {
-    if (!text || !*text) return {};
-    int count = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
-    if (count <= 0) return L"Audio replacement error.";
-    std::wstring result(static_cast<size_t>(count), L'\0');
-    MultiByteToWideChar(CP_UTF8, 0, text, -1, result.data(), count);
-    result.pop_back();
-    return result;
-}
-
 std::wstring executable_directory() {
     wchar_t path[32768] = {};
     DWORD length = GetModuleFileNameW(nullptr, path,
@@ -108,13 +90,6 @@ void set_live_error(wchar_t *text, size_t count, const wchar_t *message) {
               static_cast<int>(count));
 }
 
-void live_audio_sink(void *user, int16_t sample) {
-    auto *state = static_cast<BBLiveWindow *>(user);
-    if (!state) return;
-    sample = bb_audio_replacement_mix_sample(&state->replacements, sample);
-    bb_audio_queue_sink(&state->audio_queue, sample);
-}
-
 unsigned char keyboard_mask(const BBLiveWindow *state, WPARAM key,
                             unsigned player) {
     static const unsigned char masks[BB_NES_BINDING_COUNT] = {
@@ -128,27 +103,36 @@ unsigned char keyboard_mask(const BBLiveWindow *state, WPARAM key,
     return result;
 }
 
-unsigned char gamepad_mask(SDL_Gamepad *gamepad) {
+unsigned char gamepad_mask(BBLiveWindow *state, size_t player) {
     unsigned char result = 0u;
-    constexpr Sint16 deadzone = 12000;
-    if (!gamepad || !SDL_GamepadConnected(gamepad)) return result;
+    constexpr Sint16 engage_deadzone = 12000;
+    constexpr Sint16 release_deadzone = 9000;
+    if (!state || player >= state->gamepads.size()) return result;
+    SDL_Gamepad *gamepad=state->gamepads[player];
+    if (!gamepad || !SDL_GamepadConnected(gamepad)) {
+        state->gamepad_axis_masks[player]=0u;
+        return result;
+    }
     /* NES A/B remain distinct: south face button is A, west is B. */
     if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH)) result |= kNesA;
     if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST)) result |= kNesB;
     if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_BACK)) result |= kNesSelect;
     if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_START)) result |= kNesStart;
-    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP) ||
-        SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) < -deadzone)
-        result |= kNesUp;
-    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) ||
-        SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) > deadzone)
-        result |= kNesDown;
-    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ||
-        SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) < -deadzone)
-        result |= kNesLeft;
-    if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
-        SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) > deadzone)
-        result |= kNesRight;
+    const Sint16 x=SDL_GetGamepadAxis(gamepad,SDL_GAMEPAD_AXIS_LEFTX);
+    const Sint16 y=SDL_GetGamepadAxis(gamepad,SDL_GAMEPAD_AXIS_LEFTY);
+    unsigned char axes=state->gamepad_axis_masks[player];
+    if(y<=-engage_deadzone)axes=(unsigned char)((axes&~(kNesUp|kNesDown))|kNesUp);
+    else if(y>=engage_deadzone)axes=(unsigned char)((axes&~(kNesUp|kNesDown))|kNesDown);
+    else if(y>-release_deadzone&&y<release_deadzone)axes&=(unsigned char)~(kNesUp|kNesDown);
+    if(x<=-engage_deadzone)axes=(unsigned char)((axes&~(kNesLeft|kNesRight))|kNesLeft);
+    else if(x>=engage_deadzone)axes=(unsigned char)((axes&~(kNesLeft|kNesRight))|kNesRight);
+    else if(x>-release_deadzone&&x<release_deadzone)axes&=(unsigned char)~(kNesLeft|kNesRight);
+    state->gamepad_axis_masks[player]=axes;
+    result|=axes;
+    if(SDL_GetGamepadButton(gamepad,SDL_GAMEPAD_BUTTON_DPAD_UP))result|=kNesUp;
+    if(SDL_GetGamepadButton(gamepad,SDL_GAMEPAD_BUTTON_DPAD_DOWN))result|=kNesDown;
+    if(SDL_GetGamepadButton(gamepad,SDL_GAMEPAD_BUTTON_DPAD_LEFT))result|=kNesLeft;
+    if(SDL_GetGamepadButton(gamepad,SDL_GAMEPAD_BUTTON_DPAD_RIGHT))result|=kNesRight;
     return result;
 }
 
@@ -162,15 +146,25 @@ unsigned char sanitize_nes_directions(unsigned char input) {
     return input;
 }
 
-void open_gamepads(BBLiveWindow *state) {
+void refresh_gamepads(BBLiveWindow *state) {
     int count = 0;
     SDL_JoystickID *ids = nullptr;
-    if (!state || !SDL_InitSubSystem(SDL_INIT_GAMEPAD)) return;
-    state->gamepad_initialized = true;
+    if(!state||!state->gamepad_initialized)return;
+    for(SDL_Gamepad *gamepad:state->gamepads)if(gamepad)SDL_CloseGamepad(gamepad);
+    state->gamepads={};state->gamepad_axis_masks={};
     ids = SDL_GetGamepads(&count);
     for (int index = 0; ids && index < count && index < 2; ++index)
         state->gamepads[static_cast<size_t>(index)] = SDL_OpenGamepad(ids[index]);
     SDL_free(ids);
+}
+
+void open_gamepads(BBLiveWindow *state) {
+    if (!state || !SDL_InitSubSystem(SDL_INIT_GAMEPAD)) return;
+    state->gamepad_initialized = true;
+    const std::string database=utf8(
+        (executable_directory()+L"\\gamecontrollerdb.txt").c_str());
+    if(!database.empty())(void)SDL_AddGamepadMappingsFromFile(database.c_str());
+    refresh_gamepads(state);
 }
 
 void close_gamepads(BBLiveWindow *state) {
@@ -178,28 +172,18 @@ void close_gamepads(BBLiveWindow *state) {
     for (SDL_Gamepad *gamepad : state->gamepads)
         if (gamepad) SDL_CloseGamepad(gamepad);
     state->gamepads = {};
+    state->gamepad_axis_masks = {};
     if (state->gamepad_initialized) SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
     state->gamepad_initialized = false;
 }
 
-bool run_frame(BBLiveWindow *state) {
-    unsigned target = state->runtime.ppu.frame + 1u;
-    while (!state->runtime.stopped && state->runtime.ppu.frame < target) {
-        (void)bb_runtime_service_interrupt(&state->runtime);
-        if (bb_audio_replacement_intercept_dispatch(
-                &state->replacements, &state->runtime)) continue;
-        if (bb_generated_execute(&state->runtime) != BB_EXEC_OK) return false;
-    }
-    return !state->runtime.stopped;
-}
-
 void submit_frame(BBLiveWindow *state) {
     if (!state) return;
-    state->rgba.resize(BB_FRAME_PIXELS * 4u);
-    if (bb_render_rgba(&state->runtime, state->rgba.data(),
-                       BB_FRAME_WIDTH * 4u)) {
+    state->rgba.resize(BB_CORE_FRAME_PIXELS * 4u);
+    if (bb_static_core_frame_copy_rgba(state->core, state->rgba.data(),
+                                      BB_CORE_FRAME_WIDTH * 4u)) {
         bb_video_output_submit_rgba(&state->video_output, state->rgba.data(),
-                                    BB_FRAME_WIDTH * 4u);
+                                    BB_CORE_FRAME_WIDTH * 4u);
     }
 }
 
@@ -230,12 +214,14 @@ bool arm_frame_timer(BBLiveWindow *state) {
 
 void report_core_failure(BBLiveWindow *state) {
     wchar_t message[512] = {};
+    BBCoreObservation observation{};
     if (!state || state->core_failure_reported) return;
     state->core_failure_reported = true;
+    (void)bb_static_core_observe(state->core, &observation);
     _snwprintf(message, std::size(message),
-        L"The static core stopped at frame %u. Error %u, bank %u, PC $%04X.",
-        state->runtime.ppu.frame, state->runtime.error_code,
-        state->runtime.error_bank, state->runtime.error_pc);
+        L"The static core stopped at frame %u. Trap %S, bank %u, PC $%04X.",
+        observation.frame, bb_static_core_trap_name(observation.trap),
+        observation.physical_prg_bank, observation.program_counter);
     MessageBoxW(state->hwnd, message, L"Bubble Bobble static-core error",
                 MB_OK | MB_ICONERROR);
 }
@@ -245,12 +231,16 @@ void pump_emulation(BBLiveWindow *state) {
     double frame_ticks;
     unsigned frames_run = 0u;
     if (!state) return;
-    SDL_PumpEvents();
-    const unsigned char gamepad_p1=gamepad_mask(state->gamepads[0]);
-    const unsigned char gamepad_p2=gamepad_mask(state->gamepads[1]);
+    SDL_Event event{};bool gamepads_changed=false;
+    while(SDL_PollEvent(&event))
+        if(event.type==SDL_EVENT_GAMEPAD_ADDED||
+           event.type==SDL_EVENT_GAMEPAD_REMOVED)gamepads_changed=true;
+    if(gamepads_changed)refresh_gamepads(state);
+    const unsigned char gamepad_p1=gamepad_mask(state,0u);
+    const unsigned char gamepad_p2=gamepad_mask(state,1u);
     if (state->paused) {
         reset_frame_clock(state);
-        bb_audio_output_pump(&state->audio_output, &state->audio_queue);
+        bb_audio_output_pump(&state->audio_output, state->core);
         return;
     }
     QueryPerformanceCounter(&now);
@@ -262,8 +252,10 @@ void pump_emulation(BBLiveWindow *state) {
             state->keyboard_p1|state->keyboard_pressed_p1|gamepad_p1));
         const unsigned char p2=sanitize_nes_directions(static_cast<unsigned char>(
             state->keyboard_p2|state->keyboard_pressed_p2|gamepad_p2));
-        bb_runtime_set_controllers(&state->runtime,p1,p2);
-        if (!run_frame(state)) {
+        BBFrameResult frame_result{};
+        if (!bb_static_core_advance_frame(state->core, p1, p2, 0u,
+                                          &frame_result) ||
+            !frame_result.completed) {
             state->paused = true;
             bb_audio_output_pause(&state->audio_output);
             report_core_failure(state);
@@ -281,7 +273,7 @@ void pump_emulation(BBLiveWindow *state) {
         state->next_frame_tick = static_cast<double>(now.QuadPart) + frame_ticks;
     }
     if (frames_run) submit_frame(state);
-    bb_audio_output_pump(&state->audio_output, &state->audio_queue);
+    bb_audio_output_pump(&state->audio_output, state->core);
     bb_video_output_present(&state->video_output,
                             state->settings.integer_scale,
                             state->settings.correct_aspect);
@@ -303,79 +295,23 @@ void toggle_pause(BBLiveWindow *state) {
     }
 }
 
-std::wstring replacement_path(const wchar_t *directory, size_t index) {
-    wchar_t filename[48] = {};
-    _snwprintf(filename, std::size(filename), L"sound-select-%02u.wav",
-               static_cast<unsigned>(index));
-    return std::wstring(directory ? directory : L"") + L"\\" + filename;
-}
-
-bool read_wide_file(const std::wstring &path,
-                    std::vector<unsigned char> &data) {
-    HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
-        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) return false;
-    LARGE_INTEGER length = {};
-    if (!GetFileSizeEx(file, &length) || length.QuadPart <= 0 ||
-        length.HighPart != 0) {
-        CloseHandle(file);
-        return false;
-    }
-    data.resize(static_cast<size_t>(length.LowPart));
-    DWORD got = 0;
-    bool ok = ReadFile(file, data.data(), length.LowPart, &got, nullptr) != FALSE &&
-              got == length.LowPart;
-    CloseHandle(file);
-    if (!ok) data.clear();
-    return ok;
-}
-
-bool load_live_replacements(BBLiveWindow *state, const wchar_t *directory,
-    const unsigned char *enabled, size_t count, wchar_t *error_text,
-    size_t error_count) {
-    char error[256] = {};
-    bb_audio_replacement_init(&state->replacements);
-    if (!directory || !directory[0] || !enabled) return true;
-    for (size_t index = 0u;
-         index < count && index < BB_AUDIO_REPLACEMENT_SELECTOR_COUNT;
-         ++index) {
-        if (!enabled[index]) continue;
-        std::wstring path = replacement_path(directory, index);
-        std::vector<unsigned char> data;
-        if (!read_wide_file(path, data)) {
-            set_live_error(error_text, error_count,
-                (L"Could not preload enabled replacement: " + path).c_str());
-            return false;
-        }
-        if (!bb_audio_replacement_load_wav_memory(&state->replacements,
-                static_cast<uint8_t>(index), data.data(), data.size(), 1,
-                error, sizeof(error))) {
-            std::wstring message = L"Replacement rejected for Sound Select " +
-                std::to_wstring(index) + L": " + widen_utf8(error);
-            set_live_error(error_text, error_count, message.c_str());
-            return false;
-        }
-    }
-    return true;
-}
-
 bool save_quick_snapshot(BBLiveWindow *state) {
-    std::wstring directory = executable_directory() + L"\\Snapshots";
+    std::wstring directory = executable_directory() + L"\\Saves";
     std::wstring path = directory + L"\\Quick Save.bbs";
     char error[256] = {};
     if (!CreateDirectoryW(directory.c_str(), nullptr) &&
         GetLastError() != ERROR_ALREADY_EXISTS) return false;
-    return bb_snapshot_save(&state->runtime, utf8(path.c_str()).c_str(),
-                            error, sizeof(error)) != 0;
+    return bb_static_core_snapshot_save_file(state->core,
+        utf8(path.c_str()).c_str(), error, sizeof(error)) != 0;
 }
 
 bool load_quick_snapshot(BBLiveWindow *state) {
-    std::wstring path = executable_directory() + L"\\Snapshots\\Quick Save.bbs";
+    std::wstring path = executable_directory() + L"\\Saves\\Quick Save.bbs";
     char error[256] = {};
-    if (!bb_snapshot_load(&state->runtime, &state->rom,
-                          utf8(path.c_str()).c_str(), error, sizeof(error)))
+    if (!bb_static_core_snapshot_load_file(state->core,
+            utf8(path.c_str()).c_str(), error, sizeof(error)))
         return false;
-    bb_audio_queue_reset(&state->audio_queue);
+    bb_static_core_audio_clear(state->core);
     bb_audio_output_flush(&state->audio_output);
     submit_frame(state);
     reset_frame_clock(state);
@@ -386,7 +322,7 @@ bool take_screenshot(BBLiveWindow *state) {
     SYSTEMTIME time = {};
     wchar_t filename[96] = {};
     std::wstring directory = executable_directory() + L"\\Screenshots";
-    std::vector<unsigned char> rgba(BB_FRAME_PIXELS * 4u);
+    std::vector<unsigned char> rgba(BB_CORE_FRAME_PIXELS * 4u);
     if (!CreateDirectoryW(directory.c_str(), nullptr) &&
         GetLastError() != ERROR_ALREADY_EXISTS) return false;
     GetLocalTime(&time);
@@ -395,10 +331,11 @@ bool take_screenshot(BBLiveWindow *state) {
         time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute,
         time.wSecond);
     std::wstring path = directory + L"\\" + filename;
-    return bb_render_rgba(&state->runtime, rgba.data(), BB_FRAME_WIDTH * 4u) &&
-           bb_write_bmp(utf8(path.c_str()).c_str(), rgba.data(),
-                        BB_FRAME_WIDTH, BB_FRAME_HEIGHT,
-                        BB_FRAME_WIDTH * 4u);
+    return bb_static_core_frame_copy_rgba(state->core, rgba.data(),
+            BB_CORE_FRAME_WIDTH * 4u) &&
+           bb_gui_write_bmp(utf8(path.c_str()).c_str(), rgba.data(),
+                            BB_CORE_FRAME_WIDTH, BB_CORE_FRAME_HEIGHT,
+                            BB_CORE_FRAME_WIDTH * 4u);
 }
 
 LRESULT CALLBACK LiveProc(HWND window, UINT message, WPARAM wparam,
@@ -446,9 +383,7 @@ LRESULT CALLBACK LiveProc(HWND window, UINT message, WPARAM wparam,
         bb_audio_output_close(&state->audio_output);
         bb_video_output_close(&state->video_output);
         close_gamepads(state);
-        bb_audio_replacement_free(&state->replacements);
-        bb_audio_queue_free(&state->audio_queue);
-        bb_rom_free(&state->rom);
+        bb_static_core_destroy(state->core);
         if (g_active_state == state) g_active_state = nullptr;
         SetWindowLongPtrW(window, GWLP_USERDATA, 0);
         delete state;
@@ -487,9 +422,16 @@ void bb_windows_live_set_next_settings(const BBLiveSettings *settings) {
     g_next_settings_initialized = true;
 }
 
+void bb_windows_live_set_volume(int volume_percent) {
+    volume_percent = std::clamp(volume_percent, 0, 100);
+    if (g_active_state) {
+        g_active_state->settings.volume_percent = volume_percent;
+        bb_audio_output_set_volume(&g_active_state->audio_output,
+                                   volume_percent);
+    }
+}
+
 bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
-    const wchar_t *replacement_directory,
-    const unsigned char *replacement_enabled, size_t replacement_count,
     wchar_t *error_text, size_t error_text_count) {
     static bool registered = false;
     wchar_t backend_error[512] = {};
@@ -504,7 +446,7 @@ bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
         WNDCLASSW window_class = {};
         window_class.lpfnWndProc = LiveProc;
         window_class.hInstance = g_live_instance;
-        window_class.lpszClassName = L"BB100LiveWindow";
+        window_class.lpszClassName = L"BB110LiveWindow";
         window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
         window_class.hbrBackground = static_cast<HBRUSH>(
             GetStockObject(BLACK_BRUSH));
@@ -520,34 +462,17 @@ bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
     state->owner = owner;
     bb_windows_live_settings_defaults(&state->settings);
     if (g_next_settings_initialized) state->settings = g_next_settings;
-    char rom_error[256] = {};
     std::string path = utf8(rom_path);
-    if (!bb_rom_load(path.c_str(), &state->rom, rom_error,
-                     sizeof(rom_error)) ||
-        !bb_rom_is_expected(&state->rom, rom_error, sizeof(rom_error))) {
+    char rom_error[256] = {};
+    state->core = bb_static_core_create();
+    if (!state->core || !bb_static_core_reset_file(state->core, path.c_str(),
+            rom_error, sizeof(rom_error))) {
         set_live_error(error_text, error_text_count,
                        L"The exact Bubble Bobble ROM could not be loaded.");
+        bb_static_core_destroy(state->core);
         delete state;
         return false;
     }
-    if (!load_live_replacements(state, replacement_directory,
-            replacement_enabled, replacement_count, error_text,
-            error_text_count)) {
-        bb_audio_replacement_free(&state->replacements);
-        bb_rom_free(&state->rom);
-        delete state;
-        return false;
-    }
-    if (!bb_audio_queue_init(&state->audio_queue, 96000u)) {
-        set_live_error(error_text, error_text_count,
-                       L"Could not create the bounded audio queue.");
-        bb_audio_replacement_free(&state->replacements);
-        bb_rom_free(&state->rom);
-        delete state;
-        return false;
-    }
-    bb_runtime_init(&state->runtime, &state->rom);
-    bb_runtime_set_sample_sink(&state->runtime, live_audio_sink, state);
     bb_audio_output_initialize(&state->audio_output);
     bb_video_output_initialize(&state->video_output);
     if (state->settings.audio_enabled &&
@@ -555,9 +480,7 @@ bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
             state->settings.volume_percent, state->settings.audio_latency_ms,
             backend_error, std::size(backend_error))) {
         set_live_error(error_text, error_text_count, backend_error);
-        bb_audio_queue_free(&state->audio_queue);
-        bb_audio_replacement_free(&state->replacements);
-        bb_rom_free(&state->rom);
+        bb_static_core_destroy(state->core);
         delete state;
         return false;
     }
@@ -568,9 +491,7 @@ bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
             L"The high-resolution emulation clock is unavailable.");
         bb_audio_output_close(&state->audio_output);
         close_gamepads(state);
-        bb_audio_queue_free(&state->audio_queue);
-        bb_audio_replacement_free(&state->replacements);
-        bb_rom_free(&state->rom);
+        bb_static_core_destroy(state->core);
         delete state;
         return false;
     }
@@ -585,14 +506,12 @@ bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
         if(state->frame_timer)CloseHandle(state->frame_timer);
         bb_audio_output_close(&state->audio_output);
         close_gamepads(state);
-        bb_audio_queue_free(&state->audio_queue);
-        bb_audio_replacement_free(&state->replacements);
-        bb_rom_free(&state->rom);
+        bb_static_core_destroy(state->core);
         delete state;
         return false;
     }
     HWND window = CreateWindowExW(WS_EX_NOPARENTNOTIFY | WS_EX_NOACTIVATE,
-        L"BB100LiveWindow",
+        L"BB110LiveWindow",
         L"Bubble Bobble (NES)",
         WS_CHILD | WS_VISIBLE | WS_DISABLED | WS_CLIPSIBLINGS,
         0, 80, 1, 1, owner, nullptr, g_live_instance, state);
@@ -603,9 +522,7 @@ bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
         CloseHandle(state->frame_timer);
         bb_audio_output_close(&state->audio_output);
         close_gamepads(state);
-        bb_audio_queue_free(&state->audio_queue);
-        bb_audio_replacement_free(&state->replacements);
-        bb_rom_free(&state->rom);
+        bb_static_core_destroy(state->core);
         delete state;
         return false;
     }

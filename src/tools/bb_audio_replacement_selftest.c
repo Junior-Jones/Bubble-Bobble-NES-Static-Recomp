@@ -189,7 +189,7 @@ static int run_core_test(void) {
     bb_audio_replacement_set_enabled(&state, 25u, 0);
     if (bb_audio_replacement_is_ready(&state, 25u)) return 7;
     bb_audio_replacement_free(&state);
-    puts("Bubble Bobble 1.0.0 predecoded replacement PCM self-test passed.");
+    puts("Bubble Bobble 1.1.0 predecoded replacement PCM self-test passed.");
     return 0;
 }
 

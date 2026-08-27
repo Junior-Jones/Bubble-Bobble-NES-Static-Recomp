@@ -29,10 +29,9 @@ struct BBLiveSettings {
 
 void bb_windows_live_settings_defaults(BBLiveSettings *settings);
 void bb_windows_live_set_next_settings(const BBLiveSettings *settings);
+void bb_windows_live_set_volume(int volume_percent);
 
 bool bb_windows_live_start(HWND owner, const wchar_t *rom_path,
-    const wchar_t *replacement_directory,
-    const unsigned char *replacement_enabled, size_t replacement_count,
     wchar_t *error_text, size_t error_text_count);
 void bb_windows_live_stop(void);
 void bb_windows_live_toggle_pause(void);

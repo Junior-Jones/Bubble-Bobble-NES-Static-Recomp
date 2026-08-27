@@ -10,13 +10,13 @@
 
 #include <SDL3/SDL.h>
 
-#include "bb_renderer.h"
+#include "bb_static_core.h"
 
 typedef struct BBVideoOutput {
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *texture;
-    uint32_t pixels[BB_FRAME_PIXELS];
+    uint32_t pixels[BB_CORE_FRAME_PIXELS];
     uint64_t submitted_frames;
     uint64_t presented_frames;
     int frame_valid;

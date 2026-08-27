@@ -88,7 +88,7 @@ int bb_video_output_open(BBVideoOutput *output, HWND window, int vsync,
         return 0;
     }
     output->texture = SDL_CreateTexture(output->renderer, SDL_PIXELFORMAT_RGBA32,
-        SDL_TEXTUREACCESS_STREAMING, BB_FRAME_WIDTH, BB_FRAME_HEIGHT);
+        SDL_TEXTUREACCESS_STREAMING, BB_CORE_FRAME_WIDTH, BB_CORE_FRAME_HEIGHT);
     if (!output->texture ||
         !SDL_SetTextureScaleMode(output->texture, SDL_SCALEMODE_NEAREST)) {
         set_sdl_error(error, error_capacity, L"Unable to create game texture");
@@ -118,11 +118,11 @@ int bb_video_output_set_vsync(BBVideoOutput *output, int enabled) {
 int bb_video_output_submit_rgba(BBVideoOutput *output, const uint8_t *rgba,
                                 size_t stride) {
     unsigned y;
-    if (!output || !rgba || stride < BB_FRAME_WIDTH * 4u) return 0;
-    for (y = 0; y < BB_FRAME_HEIGHT; ++y) {
+    if (!output || !rgba || stride < BB_CORE_FRAME_WIDTH * 4u) return 0;
+    for (y = 0; y < BB_CORE_FRAME_HEIGHT; ++y) {
         std::memcpy(reinterpret_cast<uint8_t *>(output->pixels) +
-                        y * BB_FRAME_WIDTH * 4u,
-                    rgba + y * stride, BB_FRAME_WIDTH * 4u);
+                        y * BB_CORE_FRAME_WIDTH * 4u,
+                    rgba + y * stride, BB_CORE_FRAME_WIDTH * 4u);
     }
     output->frame_valid = 1;
     output->submitted_frames++;
@@ -134,14 +134,14 @@ void bb_video_output_calculate_destination(
     int correct_aspect, int *x, int *y, int *width, int *height) {
     int draw_width;
     int draw_height;
-    const int aspect_width = correct_aspect ? 4 : BB_FRAME_WIDTH;
-    const int aspect_height = correct_aspect ? 3 : BB_FRAME_HEIGHT;
+    const int aspect_width = correct_aspect ? 4 : BB_CORE_FRAME_WIDTH;
+    const int aspect_height = correct_aspect ? 3 : BB_CORE_FRAME_HEIGHT;
     if (output_width < 1) output_width = 1;
     if (output_height < 1) output_height = 1;
     if (integer_scale >= 1 && integer_scale <= 4) {
-        draw_height = BB_FRAME_HEIGHT * integer_scale;
+        draw_height = BB_CORE_FRAME_HEIGHT * integer_scale;
         draw_width = correct_aspect ? (draw_height * 4 + 1) / 3
-                                    : BB_FRAME_WIDTH * integer_scale;
+                                    : BB_CORE_FRAME_WIDTH * integer_scale;
     } else {
         draw_width = output_width;
         draw_height = draw_width * aspect_height / aspect_width;
@@ -174,7 +174,7 @@ int bb_video_output_present(BBVideoOutput *output, int integer_scale,
     bb_video_output_calculate_destination(output_width, output_height,
         integer_scale, correct_aspect, &x, &y, &width, &height);
     if (!SDL_UpdateTexture(output->texture, nullptr, output->pixels,
-                           BB_FRAME_WIDTH * static_cast<int>(sizeof(uint32_t))) ||
+                           BB_CORE_FRAME_WIDTH * static_cast<int>(sizeof(uint32_t))) ||
         !SDL_SetRenderDrawColor(output->renderer, 0, 0, 0, 255) ||
         !SDL_RenderClear(output->renderer)) return 0;
     destination.x = static_cast<float>(x);

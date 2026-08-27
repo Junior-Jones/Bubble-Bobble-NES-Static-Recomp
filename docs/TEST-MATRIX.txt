@@ -1,9 +1,44 @@
-Bubble Bobble 1.0.0 test matrix
+Bubble Bobble 1.1.0 regression matrix
 
-password-level01-headed-graphics through password-level20-headed-graphics: enter the documented password using normal controller input, create an actual headed window, capture the visible window at frame 2800, and require the reported round to match.
+Automated CTest coverage:
+- hash-primitives
+- mmc1-model
+- generated-direct-c-link
+- structural-contracts
+- generated-semantic-execution
+- palette-renderer
+- ppu-mmc1-rendering
+- snapshot-protocol
+- ntsc-apu-dmc
+- bounded-audio-queue
+- active-audio-snapshot
+- mods-and-music-box
+- exact-rom-sound-catalog
+- predecoded-audio-replacement
+- audio-import-normalization
+- ppu-checkpoint
 
-headed-rounds-1-to-20-verification: requires 20 actual X11 windows, 20 generated/headed pairs, exact 3x nearest-neighbor parity, 20 unique visible stage frames, and zero runtime fetch/decode/fallback/error counters.
+Public API coverage:
+- allocated opaque-core create/destroy and exact-ROM reset
+- one-frame advancement and fail-closed results
+- copied indexed/RGBA video and bounded PCM reads
+- snapshot save/load and audio-queue reset
+- observations, trap names, filtered hooks and hook re-entry rejection
 
-password-level01-complete through password-level10-complete remain active completion routes. Round 99/A0 entry, item, audio, snapshot, whole-ROM, semantic-data, and static-provenance gates remain active.
+Compaction coverage:
+- deterministic regeneration of 13,334 explicit identities and 120 helpers
+- development-only direct/structural catalog identity and fail-closed checks
+- byte-identical original/compact trace across the 2,100-frame gameplay route
+- measured source, object, library, executable and Windows ZIP sizes
 
-Online screenshot comparison is representative corroboration only. Exact visual proof uses the game-generated framebuffer and the actual headed-window pixels.
+Manual Windows coverage:
+- first-run Welcome and second-launch suppression
+- Welcome/About text plus Tab and Shift+Tab focus from multiline text boxes
+- F1 always opens the existing Welcome and shortcut-guide window
+- F4 Settings, F5 Controller Bindings and F6 Audio Settings
+- exact-ROM animated title screen and Escape round trip
+- release launch without a ROM and rejection of unsupported ROMs
+- packaged Saves and Screenshots folders with their readme files
+
+Experimental learning routes, headed Test Centre routes and incomplete hidden-
+secret claims are intentionally not part of the 1.1.0 source or certification.

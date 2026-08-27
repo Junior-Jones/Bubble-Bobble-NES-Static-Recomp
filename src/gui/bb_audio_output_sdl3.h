@@ -10,7 +10,7 @@
 
 #include <SDL3/SDL_audio.h>
 
-#include "bb_audio_queue.h"
+#include "bb_static_core.h"
 
 typedef struct BBAudioOutput {
     SDL_AudioStream *stream;
@@ -30,9 +30,10 @@ int bb_audio_output_open(BBAudioOutput *output, int volume_percent,
                          int latency_ms, wchar_t *error,
                          size_t error_capacity);
 void bb_audio_output_close(BBAudioOutput *output);
+void bb_audio_output_set_volume(BBAudioOutput *output, int volume_percent);
 void bb_audio_output_pause(BBAudioOutput *output);
 void bb_audio_output_resume(BBAudioOutput *output);
 void bb_audio_output_flush(BBAudioOutput *output);
-void bb_audio_output_pump(BBAudioOutput *output, BBAudioQueue *queue);
+void bb_audio_output_pump(BBAudioOutput *output, BBStaticCore *core);
 
 #endif

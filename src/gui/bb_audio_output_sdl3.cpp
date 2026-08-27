@@ -4,8 +4,6 @@
 
 #include "bb_audio_output_sdl3.h"
 
-#include "bb_apu.h"
-
 #include <SDL3/SDL.h>
 
 #include <algorithm>
@@ -25,7 +23,7 @@ uint32_t queued_native_frames(BBAudioOutput *output) {
 
 void update_drift_correction(BBAudioOutput *output) {
     if (!output || !output->stream || output->paused || output->priming) return;
-    uint32_t tolerance=(BB_APU_SAMPLE_RATE*kDriftToleranceMs)/1000u;
+    uint32_t tolerance=(BB_CORE_AUDIO_SAMPLE_RATE*kDriftToleranceMs)/1000u;
     float requested=1.0f;
     if(output->queue_depth_frames>output->target_frames+tolerance)
         requested=1.0f+kMaximumRateAdjustment;
@@ -67,7 +65,7 @@ int bb_audio_output_open(BBAudioOutput *output, int volume_percent,
     output->initialized = 1;
     source.format = SDL_AUDIO_S16;
     source.channels = 1;
-    source.freq = BB_APU_SAMPLE_RATE;
+    source.freq = BB_CORE_AUDIO_SAMPLE_RATE;
     output->stream = SDL_OpenAudioDeviceStream(
         SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &source, nullptr, nullptr);
     if (!output->stream) {
@@ -80,7 +78,7 @@ int bb_audio_output_open(BBAudioOutput *output, int volume_percent,
     SDL_SetAudioStreamGain(output->stream,
                            static_cast<float>(volume_percent) / 100.0f);
     output->target_frames = static_cast<uint32_t>(
-        (static_cast<uint64_t>(BB_APU_SAMPLE_RATE) * latency_ms) / 1000u);
+        (static_cast<uint64_t>(BB_CORE_AUDIO_SAMPLE_RATE) * latency_ms) / 1000u);
     output->playback_ratio=1.0f;
     output->paused = 1;
     output->priming = 1;
@@ -102,6 +100,13 @@ void bb_audio_output_close(BBAudioOutput *output) {
     std::memset(output, 0, sizeof(*output));
 }
 
+void bb_audio_output_set_volume(BBAudioOutput *output, int volume_percent) {
+    if (!output || !output->stream) return;
+    volume_percent = std::clamp(volume_percent, 0, 100);
+    (void)SDL_SetAudioStreamGain(output->stream,
+                                static_cast<float>(volume_percent) / 100.0f);
+}
+
 void bb_audio_output_pause(BBAudioOutput *output) {
     if (!output || !output->stream || output->paused) return;
     SDL_PauseAudioStreamDevice(output->stream);
@@ -115,13 +120,13 @@ void bb_audio_output_resume(BBAudioOutput *output) {
     output->paused = 0;
 }
 
-void bb_audio_output_pump(BBAudioOutput *output, BBAudioQueue *queue) {
+void bb_audio_output_pump(BBAudioOutput *output, BBStaticCore *core) {
     int16_t staging[4096];
-    if (!output || !output->stream || !queue) return;
-    while (bb_audio_queue_count(queue) > 0u) {
-        size_t available = bb_audio_queue_count(queue);
+    if (!output || !output->stream || !core) return;
+    while (bb_static_core_audio_available(core) > 0u) {
+        size_t available = bb_static_core_audio_available(core);
         size_t request = std::min(available, std::size(staging));
-        size_t frames = bb_audio_queue_pop(queue, staging, request, 0);
+        size_t frames = bb_static_core_audio_read(core, staging, request);
         if (!frames) break;
         if (SDL_PutAudioStreamData(output->stream, staging,
                 static_cast<int>(frames * sizeof(int16_t)))) {

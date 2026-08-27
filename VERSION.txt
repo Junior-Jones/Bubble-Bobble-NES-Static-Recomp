@@ -1,1 +1,35 @@
-1.0.0
+Bubble Bobble (NES) Static Recomp 1.1.0
+
+Changes from 1.0.0:
+- Added an opaque, allocated static-core API with core-owned ROM, runtime, audio, snapshots, traps, observations, and filtered hooks.
+- Unified Windows gameplay around one core-owned advance-frame operation.
+- Rebuilt the distributable Windows application as Launcher.exe with the Launcher title and the Bubble Bobble (NES) game-window title.
+- Removed the release Test Centre, test routes, direct instruction stepping, and private runtime access from the production frontend.
+- Separated Frontend Settings, Audio Settings, and Controller Bindings windows.
+- Matched the Mega Man 6 frontend layout, shortcut order, and tab navigation, including a Settings toolbar button and F4/F5/F6 for Settings, Controller Bindings, and Audio Settings.
+- Rebuilt Welcome and About as the same modeless, keyboard-navigable information windows used by Mega Man 6; Welcome opens only on the first launch and About repeats its F1 wording.
+- Completed the F1-F8 Launcher workflow for Welcome, quick save/load, settings, bindings, audio, ROM launch, and game-window captures, with Escape switching between gameplay and Launcher.
+- Added native SDL3 video presentation with nearest-neighbour filtering, fit-to-window and 1x-4x integer scaling, optional 4:3 correction, black bars, VSync, and full-screen-on-play.
+- Added bounded copied video/audio access, re-entry protection, fail-closed frame results, and an exact-ROM public-API self-test.
+- Enforced exact full-ROM and game-payload validation before Run, with unsupported ROMs rejected and unknown execution identities failing closed.
+- Added the pinned SDL game-controller database to the portable package.
+- Statically linked SDL3 and the Visual C++ runtime so the Windows release requires no SDL DLL or separate Visual C++ redistributable.
+- Removed the retired 1.0.0 Test Centre/Music Box frontend implementation, unused media converter, experimental route data, hidden-secrets research plan, and obsolete Linux/headless launcher paths from the final source.
+- Removed unused multimedia link dependencies and stale frontend contract tests while retaining focused core regression tests.
+- Added controller-database loading, gamepad hot-plug refresh, analogue-stick deadzone hysteresis, long-path ROM browsing, and accurate failed-reset reporting.
+- Persisted video, game, audio, keyboard-binding, and first-run Welcome preferences in the executable-local settings.ini, created only when needed and excluded from the official release.
+- Updated launcher file/product metadata and release documentation for 1.1.0.
+- Expanded the official README.txt with compacted-core measurements, runtime and frontend architecture, verification evidence, package boundaries and licensing details.
+- Changed audio volume to a 0-100 percentage drop-down that applies immediately to active gameplay.
+- Flush settings.ini after accepted frontend, audio and keyboard-binding changes so saved values appear on disk immediately.
+- Compacted all 13,334 fixed bank-and-PC semantic bodies into 120 compile-time-selected helpers without adding an opcode decoder or fallback.
+- Moved direct and structural context intelligence into a development-only static-analysis target so it is not linked into the production core.
+- Added a reproducible offline compaction sidecar and generator while preserving the admitted identities, successors, source provenance, diagnostics, and fail-closed behavior.
+- Removed the separate F1 controls window so F1 always opens the existing Welcome and shortcut-guide window, replacing any other open information window.
+- Fixed Tab and Shift+Tab navigation when focus is inside multiline read-only Welcome or About text boxes.
+- Moved quick-save snapshots into the packaged Saves folder and added Saves/Readme.txt.
+- Added the packaged Screenshots folder and Screenshots/Readme.txt for captured BMP files.
+- Removed SHA256SUMS.txt from the Windows release layout.
+- Finalized the eight-file Windows release layout without a ROM, settings.ini, save data, screenshots, development tools, Test folder, or other test artefacts.
+- Updated Git ignore rules so the packaged Screenshots/Readme.txt is tracked while settings.ini and generated captures remain excluded.
+- Verified all 16 focused CTest cases, the exact-ROM opaque API, a clean packaged-source build, natural Windows navigation, and a byte-identical 2,100-frame original-versus-compacted gameplay trace.

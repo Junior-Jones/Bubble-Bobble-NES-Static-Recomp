@@ -37,23 +37,23 @@ int main(void) {
         bb_audio_replacement_pcm_free(&normalized);
         return 4;
     }
-    if (!bb_wav_write_pcm16_mono("bb-1.0.0-normalized-selftest.wav", normalized.samples,
+    if (!bb_wav_write_pcm16_mono("bb-1.1.0-normalized-selftest.wav", normalized.samples,
         (size_t)normalized.sample_count, BB_APU_SAMPLE_RATE)) {
         bb_audio_replacement_pcm_free(&normalized);
         return 5;
     }
     bb_audio_replacement_pcm_free(&normalized);
-    file = fopen("bb-1.0.0-normalized-selftest.wav", "rb");
+    file = fopen("bb-1.1.0-normalized-selftest.wav", "rb");
     if (!file || fread(header, 1u, sizeof(header), file) != sizeof(header)) {
         if (file) fclose(file);
-        remove("bb-1.0.0-normalized-selftest.wav");
+        remove("bb-1.1.0-normalized-selftest.wav");
         return 6;
     }
     fclose(file);
-    remove("bb-1.0.0-normalized-selftest.wav");
+    remove("bb-1.1.0-normalized-selftest.wav");
     if (memcmp(header, "RIFF", 4u) || memcmp(header + 8u, "WAVEfmt ", 8u) ||
         header[22] != 1u || header[24] != 0x80u || header[25] != 0xBBu ||
         header[34] != 16u || memcmp(header + 36u, "data", 4u)) return 7;
-    puts("Bubble Bobble 1.0.0 PCM normalization and canonical WAV self-test passed.");
+    puts("Bubble Bobble 1.1.0 PCM normalization and canonical WAV self-test passed.");
     return 0;
 }

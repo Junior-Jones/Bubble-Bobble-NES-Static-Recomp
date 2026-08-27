@@ -1,11 +1,11 @@
-BUBBLE BOBBLE 1.0.0 WINDOWS BUILD
+BUBBLE BOBBLE 1.1.0 WINDOWS BUILD
 
-The Windows 1.0.0 launcher uses ordinary Win32 controls with SDL3 static audio, video, and gamepad support. Build with Visual Studio 2022 and the Windows SDK through the included CMake project. SDL and the Visual C++ runtime are linked statically, so the release requires no extra DLL or redistributable.
+The Windows 1.1.0 launcher uses ordinary Win32 controls and the opaque Bubble Bobble static-core API with SDL3 static audio, video, and gamepad support. Build with Visual Studio 2022 and the Windows SDK through the included CMake project. SDL and the Visual C++ runtime are linked statically, so the release requires no extra DLL or redistributable.
 
 Build commands:
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 
-The user package places Launcher.exe, README.txt, VERSION.txt, SDL-LICENSE.txt, and Rom/Readme.txt together. Put Bubble Bobble (USA).nes in Rom. Other output folders are created only when a feature first writes a file.
+The user package places Launcher.exe, README.txt, VERSION.txt, SDL-LICENSE.txt, gamecontrollerdb.txt, Rom/Readme.txt, Saves/Readme.txt, and Screenshots/Readme.txt together. Put Bubble Bobble (USA).nes in Rom. Quick saves and captured BMP files are written into the two documented output folders.
 
 The Launcher supports both controller ports and uses F1 through F8 for frontend shortcuts. Escape switches between the game and Launcher.
