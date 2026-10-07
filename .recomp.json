@@ -1,0 +1,33 @@
+{
+  "$schema": "https://recomp.fyi/schema/v1.json",
+  "game": "Bubble Bobble",
+  "project": "Bubble Bobble (NES) Static Recomp",
+  "system": "NES",
+  "type": "recomp",
+  "original": {
+    "region": "USA"
+  },
+  "status": "complete",
+  "targets": [
+    "Windows"
+  ],
+  "toolchain": "Unspecified",
+  "approach": "Custom static recompilation developed with ChatGPT, following the author's Starter NES instructions.",
+  "maintainers": [
+    {
+      "name": "Junior-Jones",
+      "link": "https://github.com/Junior-Jones"
+    }
+  ],
+  "links": [
+    {
+      "url": "https://github.com/Junior-Jones/Bubble-Bobble-NES-Static-Recomp",
+      "label": "Repository"
+    },
+    {
+      "url": "https://github.com/Junior-Jones/Bubble-Bobble-NES-Static-Recomp/blob/main/README.md",
+      "label": "Running and building instructions"
+    }
+  ],
+  "notes": "No further work is currently planned."
+}
