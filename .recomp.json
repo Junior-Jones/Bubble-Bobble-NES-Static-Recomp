@@ -29,5 +29,8 @@
       "label": "Running and building instructions"
     }
   ],
-  "notes": "No further work is currently planned."
+  "notes": "No further work is currently planned.",
+  "tags": [
+    "Platformer"
+  ]
 }
