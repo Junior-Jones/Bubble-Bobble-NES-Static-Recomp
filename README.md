@@ -1,14 +1,20 @@
-# Bubble Bobble (NES) Static Recomp 1.1.0
+# Bubble Bobble (NES) Static Recomp 1.1.1
 
-Version 1.1.0 is a native static recompilation frontend for the USA NES release of Bubble Bobble. The repository contains the generated static core, opaque production API, Windows launcher, focused regression self-tests, and build documentation.
+<a href="https://recomplauncher.com/game/bubble-bobble-nes-static-recomp"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
+
+This native static recompilation supports the USA NES release of Bubble Bobble. The repository contains the generated static core, opaque production API, Windows launcher, focused regression self-tests, and build documentation.
+
+RecompLauncher can start the game directly with your selected ROM. Its release
+profile is shipped next to `Launcher.exe`. The equivalent manual command is
+`Launcher.exe --game "C:\path\to\Bubble Bobble (USA).nes"`.
 
 The original game ROM is not included. Supply your own legally obtained copy:
 
 - Name: `Bubble Bobble (USA)`
-- Format: `.nes`
+- Format: iNES, compatible NES 2.0, or headerless PRG+CHR (`.nes` or `.bin`)
 - Region: NTSC-U
 
-Place the ROM in `Rom` beside `Rom/Readme.txt`. `Launcher.exe` detects the exact supported ROM and changes Browse to Run.
+Place the ROM in `Rom` or select it with Browse ROM. `Launcher.exe` verifies the exact game payload and changes Browse to Run. See [Rom/Readme.txt](Rom/Readme.txt) for details.
 
 ## Features
 
@@ -47,4 +53,4 @@ SDL3 is fetched by CMake and linked statically. The portable release does not re
 
 ## Notes
 
-The portable package includes `Saves` and `Screenshots` with explanatory readme files. `VERSION.txt` lists the 1.1.0 changes. See `docs` for architecture, build, and test details. Third-party notices are retained in `licenses`.
+The portable package includes `Saves` and `Screenshots` with explanatory readme files. `VERSION.txt` lists the changes. See `docs` for architecture, build, and test details. Third-party notices are retained in `licenses`.

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+  "format": 1,
+  "name": "Bubble Bobble",
+  "repo": "Junior-Jones/Bubble-Bobble-NES-Static-Recomp",
+  "game": {
+    "kind": "iso",
+    "label": "Your own Bubble Bobble (USA) NES ROM (.nes or .bin, with or without a compatible header).",
+    "dumps": [
+      {"name": "Bubble Bobble (USA) iNES ROM", "size": 163856, "crc32": "D3A91B41"},
+      {"name": "Bubble Bobble (USA) NES 2.0 ROM", "size": 163856, "crc32": "1F8B325A"},
+      {"name": "Bubble Bobble (USA) headerless ROM", "size": 163840, "crc32": "5E900522"}
+    ]
+  },
+  "start": {"program": ["Launcher.exe"], "args": ["--game", "{game}"]},
+  "config": [{"id": "main", "format": "ini", "file": [{"path": "{install}/settings.ini"}]}],
+  "saves": ["{install}/Saves"],
+  "folders": {
+    "saves": [{"path": "{install}/Saves"}],
+    "logs": [{"path": "{install}/Logs"}]
+  },
+  "settings": [
+    {
+      "id": "fullscreen",
+      "label": "Full screen on Play",
+      "in": "main",
+      "choices": [
+        {"label": "Off", "set": {"Video/FullscreenOnPlay": "0"}},
+        {"label": "On", "set": {"Video/FullscreenOnPlay": "1"}}
+      ],
+      "defaults": {"Video/FullscreenOnPlay": "0"}
+    },
+    {
+      "id": "aspect",
+      "label": "Correct to 4:3",
+      "in": "main",
+      "choices": [
+        {"label": "Off", "set": {"Video/CorrectAspect": "0"}},
+        {"label": "On", "set": {"Video/CorrectAspect": "1"}}
+      ],
+      "defaults": {"Video/CorrectAspect": "1"}
+    }
+  ],
+  "actions": [{"id": "saves", "label": "Saves", "open": "saves"}],
+  "exit_codes": {
+    "2": "Invalid launch arguments. Use --game followed by the ROM path.",
+    "3": "The ROM was rejected. Use a clean Bubble Bobble (USA) dump and check Logs for the reason.",
+    "4": "Bubble Bobble could not start. Check Logs for details."
+  },
+  "requires": ["start", "settings.ini", "settings.choices", "exit_codes"]
+}

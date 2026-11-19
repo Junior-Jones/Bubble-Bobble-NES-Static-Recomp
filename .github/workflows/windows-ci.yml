@@ -35,3 +35,9 @@ jobs:
 
       - name: Run ROM-free tests
         run: ctest --test-dir "$env:RUNNER_TEMP\\static-recomp-build" -C Release --output-on-failure
+
+      - name: Verify the deployed RecompLauncher profile
+        run: python runtime/core/tests/verify_recomplauncher.py "$env:RUNNER_TEMP/static-recomp-build/release/Launcher.exe"
+
+      - name: Verify release archives
+        run: python tools/package_release.py "$env:RUNNER_TEMP/static-recomp-build/release" "$env:RUNNER_TEMP/release-zips"

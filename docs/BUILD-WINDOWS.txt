@@ -1,11 +1,26 @@
-BUBBLE BOBBLE 1.1.0 WINDOWS BUILD
+BUBBLE BOBBLE 1.1.1 WINDOWS BUILD
 
-The Windows 1.1.0 launcher uses ordinary Win32 controls and the opaque Bubble Bobble static-core API with SDL3 static audio, video, and gamepad support. Build with Visual Studio 2022 and the Windows SDK through the included CMake project. SDL and the Visual C++ runtime are linked statically, so the release requires no extra DLL or redistributable.
+The Windows launcher uses ordinary Win32 controls and the opaque Bubble Bobble static-core API with SDL3 static audio, video, and gamepad support. Build with Visual Studio 2022 and the Windows SDK through the included CMake project. SDL and the Visual C++ runtime are linked statically, so the release requires no extra DLL or redistributable.
 
 Build commands:
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 
-The user package places Launcher.exe, README.txt, VERSION.txt, SDL-LICENSE.txt, gamecontrollerdb.txt, Rom/Readme.txt, Saves/Readme.txt, and Screenshots/Readme.txt together. Put Bubble Bobble (USA).nes in Rom. Quick saves and captured BMP files are written into the two documented output folders.
+Ship recomplauncher.json next to Launcher.exe in the Windows ZIP. The
+post-build step copies the profile, portable readmes, controller database and
+licences into the release output. Players can put their Bubble Bobble (USA)
+dump in Rom, select it with Browse ROM, or pass it using --game. Saves and
+screenshots use their documented folders. Session diagnostics go in Logs.
+
+From the Git checkout after building Release, create and verify the two ZIPs:
+
+  python tools/package_release.py <Release-output-directory> <ZIP-output-directory>
+
+To verify container compatibility, build bb-rom-audit and
+bb-static-core-api-selftest, then run:
+
+  python runtime/core/tests/verify_rom_containers.py <bb-rom-audit.exe> <bb-static-core-api-selftest.exe> <legacy-reference.nes> [existing-snapshot.bbs]
+
+Use a local reference dump outside the source and release folders.
 
 The Launcher supports both controller ports and uses F1 through F8 for frontend shortcuts. Escape switches between the game and Launcher.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(BubbleBobbleStaticRecomp VERSION 1.1.0 LANGUAGES C CXX)
+project(BubbleBobbleStaticRecomp VERSION 1.1.1 LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
@@ -164,7 +164,7 @@ if(WIN32)
   target_include_directories(BubbleBobbleLauncher PRIVATE
     src/gui src/common runtime/core/include)
   target_link_libraries(BubbleBobbleLauncher PRIVATE
-    bb_static_core SDL3::SDL3-static comdlg32 user32 gdi32)
+    bb_static_core SDL3::SDL3-static comdlg32 user32 gdi32 shell32)
   set_target_properties(BubbleBobbleLauncher PROPERTIES
     OUTPUT_NAME "Launcher"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/release")
@@ -177,6 +177,9 @@ if(WIN32)
       -Wall -Wextra -Wpedantic -Werror)
   endif()
   add_custom_command(TARGET BubbleBobbleLauncher POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+      "${CMAKE_SOURCE_DIR}/recomplauncher.json"
+      "$<TARGET_FILE_DIR:BubbleBobbleLauncher>/recomplauncher.json"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
       "${CMAKE_SOURCE_DIR}/README.txt"
       "$<TARGET_FILE_DIR:BubbleBobbleLauncher>/README.txt"
