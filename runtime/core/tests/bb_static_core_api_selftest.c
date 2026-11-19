@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static BBHookAction reentry_hook(BBStaticCore *core,
                                  const BBHookEvent *event, void *user) {
@@ -23,14 +24,18 @@ int main(int argc, char **argv) {
                            0, 0xFFFF};
     unsigned calls = 0u;
     uint8_t *pixels;
-    if (argc != 2) {
-        puts("usage: bb-static-core-api-selftest <exact-rom>");
+    char error[256] = {0};
+    if (argc != 2 && argc != 4) {
+        puts("usage: bb-static-core-api-selftest <exact-rom> [--save|--load snapshot.bbs]");
         return 77;
     }
     core = bb_static_core_create();
     pixels = (uint8_t *)malloc(BB_CORE_FRAME_PIXELS * 4u);
     if (!core || !pixels) return 1;
-    if (!bb_static_core_reset_file(core, argv[1], NULL, 0u)) return 2;
+    if (!bb_static_core_reset_file(core, argv[1], error, sizeof(error))) {
+        fprintf(stderr, "%s\n", error);
+        return 2;
+    }
     if (!bb_static_core_advance_frame(core, 0u, 0u, 0u, &frame) ||
         !frame.completed || frame.end_frame != frame.start_frame + 1u) return 3;
     if (!bb_static_core_frame_copy_rgba(core, pixels,
@@ -40,6 +45,18 @@ int main(int argc, char **argv) {
         observation.runtime_opcode_decodes ||
         observation.interpreter_fallbacks ||
         observation.generated_context_misses) return 5;
+    if (argc == 4) {
+        int ok;
+        if (strcmp(argv[2], "--save") == 0)
+            ok = bb_static_core_snapshot_save_file(core, argv[3], error, sizeof(error));
+        else if (strcmp(argv[2], "--load") == 0)
+            ok = bb_static_core_snapshot_load_file(core, argv[3], error, sizeof(error));
+        else return 77;
+        if (!ok) {
+            fprintf(stderr, "%s\n", error);
+            return 7;
+        }
+    }
     bb_static_core_set_hook(core, &filter, reentry_hook, &calls);
     if (bb_static_core_advance_frame(core, 0u, 0u, 0u, &frame) ||
         calls != 1u || !frame.stopped) return 6;

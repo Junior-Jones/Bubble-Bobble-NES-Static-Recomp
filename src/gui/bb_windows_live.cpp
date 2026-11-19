@@ -222,6 +222,7 @@ void report_core_failure(BBLiveWindow *state) {
         L"The static core stopped at frame %u. Trap %S, bank %u, PC $%04X.",
         observation.frame, bb_static_core_trap_name(observation.trap),
         observation.physical_prg_bank, observation.program_counter);
+    bb_windows_log(message);
     MessageBoxW(state->hwnd, message, L"Bubble Bobble static-core error",
                 MB_OK | MB_ICONERROR);
 }

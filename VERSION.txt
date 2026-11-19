@@ -1,4 +1,10 @@
-Bubble Bobble (NES) Static Recomp 1.1.0
+Bubble Bobble (NES) Static Recomp 1.1.1
+
+Changes from 1.1.0:
+- Accept compatible iNES, NES 2.0, and headerless USA dumps by exact PRG+CHR SHA-256.
+- Add .bin detection and Unicode ROM paths to the Windows launcher.
+- Preserve existing snapshot identity across supported ROM containers.
+- Ship a RecompLauncher profile with direct --game launch, settings, saves, and logs.
 
 Changes from 1.0.0:
 - Added an opaque, allocated static-core API with core-owned ROM, runtime, audio, snapshots, traps, observations, and filtered hooks.

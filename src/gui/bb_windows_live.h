@@ -45,6 +45,7 @@ bool bb_windows_live_take_screenshot(void);
 bool bb_windows_live_is_running(void);
 bool bb_windows_live_is_paused(void);
 HWND bb_windows_live_window(void);
+void bb_windows_log(const wchar_t *message);
 #endif
 
 #endif

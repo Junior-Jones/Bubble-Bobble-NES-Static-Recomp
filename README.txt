@@ -1,8 +1,9 @@
-# Bubble Bobble (NES) Static Recomp 1.1.0
+# Bubble Bobble (NES) Static Recomp 1.1.1
 
 Native Windows frontend and game-specific static core for Bubble Bobble on the Nintendo Entertainment System.
 
-The original game ROM is not included. Supply a legally obtained copy of the USA release in `.nes` format, named `Bubble Bobble (USA).nes`.
+The original game ROM is not included. Supply a legally obtained Bubble Bobble
+(USA) dump as .nes or .bin. See Rom/Readme.txt for supported containers.
 
 ## Running the application
 
@@ -76,7 +77,11 @@ The release build produces the native `Launcher.exe` with SDL and the Visual C++
 
 ## Package contents and licensing
 
-The Windows release contains `Launcher.exe`, `README.txt`, `VERSION.txt`, `SDL-LICENSE.txt`, `gamecontrollerdb.txt`, and the `Readme.txt` files under `Rom`, `Saves` and `Screenshots`. `SHA256SUMS`, development tools, build trees and test artefacts are intentionally excluded.
+The Windows release includes `recomplauncher.json` next to `Launcher.exe`.
+RecompLauncher passes the selected ROM using `--game`. Saves are in `Saves`
+and the latest launcher diagnostics are in `Logs/latest.log`.
+The portable ZIP includes readme files under `Rom`, `Saves`, and
+`Screenshots`, supporting licences and the controller database.
 
 The source archive contains the project sources, generated static semantics, build configuration, documentation, licenses and development verification tools needed to inspect and rebuild the project. It does not contain the copyrighted game ROM or locally generated user data.
 

@@ -202,7 +202,7 @@ int bb_snapshot_save(const BBRuntime *rt, const char *path, char *error, size_t 
     h.header_size = (uint32_t)sizeof(h);
     h.payload_size = (uint32_t)sizeof(p);
     h.payload_crc32 = bb_crc32((const uint8_t *)&p, sizeof(p));
-    snprintf(h.rom_sha256, sizeof(h.rom_sha256), "%s", rt->rom->sha256);
+    snprintf(h.rom_sha256, sizeof(h.rom_sha256), "%s", bb_rom_snapshot_sha256(rt->rom));
     payload_hash(&p, h.payload_sha256);
     h.completed_frame = rt->ppu.frame;
     h.continuation_pc = rt->cpu.pc;
@@ -243,7 +243,7 @@ int bb_snapshot_load(BBRuntime *rt, const BBRom *rom, const char *path, char *er
     if (memcmp(h.magic, BB_SNAPSHOT_MAGIC, 8u) != 0 || h.version != BB_SNAPSHOT_VERSION || h.header_size != sizeof(h) || h.payload_size != sizeof(p)) {
         set_error(error,error_cap,"snapshot format or version mismatch"); return 0;
     }
-    if (strcmp(h.rom_sha256, rom->sha256) != 0) { set_error(error,error_cap,"snapshot ROM identity mismatch"); return 0; }
+    if (strcmp(h.rom_sha256, bb_rom_snapshot_sha256(rom)) != 0) { set_error(error,error_cap,"snapshot ROM identity mismatch"); return 0; }
     if (h.payload_crc32 != bb_crc32((const uint8_t *)&p, sizeof(p))) { set_error(error,error_cap,"snapshot CRC32 mismatch"); return 0; }
     payload_hash(&p, hash);
     if (strcmp(hash, h.payload_sha256) != 0) { set_error(error,error_cap,"snapshot SHA-256 mismatch"); return 0; }

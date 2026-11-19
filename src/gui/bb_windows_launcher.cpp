@@ -3,6 +3,9 @@
 #include <windows.h>
 #include <algorithm>
 #include <commdlg.h>
+#include <shellapi.h>
+#include <cstdio>
+#include <cwchar>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -39,6 +42,18 @@ static DWORD g_saved_window_ex_style=0;
 static WINDOWPLACEMENT g_saved_window_placement={sizeof(WINDOWPLACEMENT)};
 static BBLiveSettings g_live_settings{};
 static std::wstring g_settings_ini;
+static std::wstring g_session_log;
+
+void bb_windows_log(const wchar_t *message) {
+    if (g_session_log.empty()) return;
+    FILE *log = _wfopen(g_session_log.c_str(), L"a, ccs=UTF-8");
+    if (!log) return;
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    std::fwprintf(log,L"%02d:%02d:%02d %ls\n",
+                  now.wHour,now.wMinute,now.wSecond,message);
+    std::fclose(log);
+}
 
 /* IsDialogMessage supplies ordinary dialog navigation, but multiline read-only
    edit controls can retain Tab. Route Tab explicitly so every information and
@@ -110,6 +125,26 @@ static std::wstring executable_directory() {
     std::wstring value(path,length);
     size_t slash=value.find_last_of(L"\\/");
     return slash==std::wstring::npos ? L"." : value.substr(0,slash);
+}
+
+static void start_session_log() {
+    const std::wstring directory=executable_directory()+L"\\Logs";
+    if (!CreateDirectoryW(directory.c_str(),nullptr) &&
+        GetLastError()!=ERROR_ALREADY_EXISTS) return;
+    g_session_log=directory+L"\\latest.log";
+    FILE *log=_wfopen(g_session_log.c_str(),L"w, ccs=UTF-8");
+    if (log) std::fclose(log);
+    bb_windows_log(L"Bubble Bobble NES Static Recomp 1.1.1");
+}
+
+static bool read_launch_rom(std::wstring &path) {
+    int count=0;
+    LPWSTR *args=CommandLineToArgvW(GetCommandLineW(),&count);
+    if (!args) return false;
+    const bool direct=count==3 && std::wcscmp(args[1],L"--game")==0 && args[2][0];
+    if (direct) path=args[2];
+    LocalFree(args);
+    return count==1 || direct;
 }
 
 static bool is_frontend_shortcut_key(UINT key) {
@@ -196,28 +231,38 @@ static bool path_is_file(const std::wstring &path) {
     return attributes!=INVALID_FILE_ATTRIBUTES && !(attributes&FILE_ATTRIBUTE_DIRECTORY);
 }
 
+static bool validate_rom(const std::wstring &path, char *error, size_t capacity) {
+    BBRom rom{};
+    const std::string utf8_path=narrow(path);
+    const bool valid=bb_rom_load(utf8_path.c_str(),&rom,error,capacity) &&
+                     bb_rom_is_expected(&rom,error,capacity);
+    bb_rom_free(&rom);
+    return valid;
+}
+
 
 static bool choose_rom(HWND owner) {
     wchar_t path[32768]={0};
     std::wstring initial_directory=executable_directory()+L"\\Rom";
     OPENFILENAMEW ofn{};
     ofn.lStructSize=sizeof(ofn); ofn.hwndOwner=owner;
-    ofn.lpstrFilter=L"NES ROMs (*.nes)\0*.nes\0All files\0*.*\0";
+    ofn.lpstrFilter=L"NES ROMs (*.nes;*.bin)\0*.nes;*.bin\0All files\0*.*\0";
     ofn.lpstrFile=path; ofn.nMaxFile=(DWORD)BB_ARRAY_COUNT(path);
     ofn.lpstrInitialDir=initial_directory.c_str();
     ofn.lpstrDefExt=L"nes";
     ofn.nFilterIndex=1;
     ofn.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
     if (!GetOpenFileNameW(&ofn)) return false;
-    BBRom rom{}; char error[256]={0},reason[256]={0};
-    std::string p=narrow(path);
-    if (!bb_rom_load(p.c_str(),&rom,error,sizeof(error)) || !bb_rom_is_expected(&rom,reason,sizeof(reason))) {
-        bb_rom_free(&rom);
-        MessageBoxA(owner,reason[0]?reason:error,"Bubble Bobble ROM rejected",MB_OK|MB_ICONERROR);
+    char error[256]={0};
+    if (!validate_rom(path,error,sizeof(error))) {
+        wchar_t message[256]={};
+        MultiByteToWideChar(CP_UTF8,0,error,-1,message,(int)BB_ARRAY_COUNT(message));
+        bb_windows_log(message);
+        MessageBoxA(owner,error,"Bubble Bobble ROM rejected",MB_OK|MB_ICONERROR);
         return false;
     }
-    g_rom_path=path; bb_rom_free(&rom);
-    set_status(L"Bubble Bobble (USA) .nes ROM selected. Choose Run or press F7.");
+    g_rom_path=path;
+    set_status(L"Bubble Bobble (USA) ROM selected. Choose Run or press F7.");
     return true;
 }
 
@@ -226,9 +271,10 @@ static bool try_load_default_rom() {
     const std::wstring preferred=rom_directory+L"\\Bubble Bobble (USA).nes";
     std::vector<std::wstring> candidates;
     candidates.push_back(preferred);
-    WIN32_FIND_DATAW found{};
-    HANDLE search=FindFirstFileW((rom_directory+L"\\*.nes").c_str(),&found);
-    if(search!=INVALID_HANDLE_VALUE) {
+    for(const wchar_t *pattern:{L"\\*.nes",L"\\*.bin"}) {
+        WIN32_FIND_DATAW found{};
+        HANDLE search=FindFirstFileW((rom_directory+pattern).c_str(),&found);
+        if(search==INVALID_HANDLE_VALUE) continue;
         do {
             if(!(found.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)) {
                 std::wstring candidate=rom_directory+L"\\"+found.cFileName;
@@ -240,14 +286,11 @@ static bool try_load_default_rom() {
     }
     for(const std::wstring &candidate:candidates) {
         if(!path_is_file(candidate)) continue;
-        BBRom rom{};char error[256]={0};std::string path=narrow(candidate);
-        if(bb_rom_load(path.c_str(),&rom,error,sizeof(error))&&
-           bb_rom_is_expected(&rom,error,sizeof(error))) {
-            bb_rom_free(&rom);g_rom_path=candidate;
-            set_status(L"Bubble Bobble (USA) .nes ROM found in the Rom folder. Choose Run to start.");
+        if(validate_rom(candidate,nullptr,0)) {
+            g_rom_path=candidate;
+            set_status(L"Bubble Bobble (USA) ROM found in the Rom folder. Choose Run to start.");
             return true;
         }
-        bb_rom_free(&rom);
     }
     return false;
 }
@@ -316,7 +359,7 @@ static LRESULT CALLBACK SettingsProc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
 static void open_settings_window(HWND owner) {
     if(g_settings_window){ShowWindow(g_settings_window,SW_SHOW);SetForegroundWindow(g_settings_window);return;}
     WNDCLASSW wc{};wc.lpfnWndProc=SettingsProc;wc.hInstance=g_instance;wc.lpszClassName=L"BB110Settings";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassW(&wc);
-    g_settings_window=CreateWindowExW(WS_EX_CONTROLPARENT,L"BB110Settings",L"Bubble Bobble 1.1.0 Frontend Settings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,620,340,owner,nullptr,g_instance,nullptr);
+    g_settings_window=CreateWindowExW(WS_EX_CONTROLPARENT,L"BB110Settings",L"Bubble Bobble 1.1.1 Frontend Settings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,620,340,owner,nullptr,g_instance,nullptr);
     ShowWindow(g_settings_window,SW_SHOW);
 }
 
@@ -369,7 +412,7 @@ static LRESULT CALLBACK AudioProc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
 static void open_audio_window(HWND owner) {
     if(g_audio_window){ShowWindow(g_audio_window,SW_SHOW);SetForegroundWindow(g_audio_window);return;}
     WNDCLASSW wc{};wc.lpfnWndProc=AudioProc;wc.hInstance=g_instance;wc.lpszClassName=L"BB110Audio";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassW(&wc);
-    g_audio_window=CreateWindowExW(WS_EX_CONTROLPARENT,L"BB110Audio",L"Bubble Bobble 1.1.0 Audio Settings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,490,285,owner,nullptr,g_instance,nullptr);
+    g_audio_window=CreateWindowExW(WS_EX_CONTROLPARENT,L"BB110Audio",L"Bubble Bobble 1.1.1 Audio Settings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,490,285,owner,nullptr,g_instance,nullptr);
     ShowWindow(g_audio_window,SW_SHOW);
 }
 
@@ -390,7 +433,7 @@ static void show_welcome(HWND owner) {
         L"F6 - Audio settings\r\n"
         L"F7 - Run the selected ROM\r\n"
         L"F8 - Capture the complete game window\r\n\r\n"
-        L"ROM title: Bubble Bobble\r\nRegion: USA\r\nFile type: .nes\r\nPlace the ROM in the Rom folder or select Browse ROM.",
+        L"ROM title: Bubble Bobble\r\nRegion: USA\r\nFile type: .nes or .bin\r\nPlace the ROM in the Rom folder or select Browse ROM.",
         620,560);
 }
 
@@ -532,7 +575,7 @@ static LRESULT CALLBACK BindingsProc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
 static void open_bindings_window(HWND owner) {
     if(g_bindings_window){ShowWindow(g_bindings_window,SW_SHOW);SetForegroundWindow(g_bindings_window);return;}
     WNDCLASSW wc{};wc.lpfnWndProc=BindingsProc;wc.hInstance=g_instance;wc.lpszClassName=L"BB110Bindings";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hbrBackground=(HBRUSH)(COLOR_WINDOW+1);RegisterClassW(&wc);
-    g_bindings_window=CreateWindowExW(WS_EX_CONTROLPARENT,L"BB110Bindings",L"Bubble Bobble 1.1.0 Controller Bindings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,620,505,owner,nullptr,g_instance,nullptr);
+    g_bindings_window=CreateWindowExW(WS_EX_CONTROLPARENT,L"BB110Bindings",L"Bubble Bobble 1.1.1 Controller Bindings",WS_OVERLAPPED|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,CW_USEDEFAULT,CW_USEDEFAULT,620,505,owner,nullptr,g_instance,nullptr);
     ShowWindow(g_bindings_window,SW_SHOW);
 }
 
@@ -647,17 +690,20 @@ static void apply_game_presentation(HWND window) {
     SetFocus(window);
 }
 
-static bool start_live_game(HWND window) {
+static bool start_live_game(HWND window, bool report_dialog=true) {
     if(g_rom_path.empty()) {
-        MessageBoxW(window,L"Place the Bubble Bobble (USA) .nes ROM in the Rom folder or select Browse ROM.",L"Bubble Bobble ROM",MB_OK|MB_ICONINFORMATION);
+        MessageBoxW(window,L"Place your Bubble Bobble (USA) ROM in the Rom folder or select Browse ROM.",L"Bubble Bobble ROM",MB_OK|MB_ICONINFORMATION);
         return false;
     }
     wchar_t error[512]={0};bb_windows_live_set_next_settings(&g_live_settings);
     if(!bb_windows_live_start(window,g_rom_path.c_str(),
         error,BB_ARRAY_COUNT(error))) {
-        MessageBoxW(window,error[0]?error:L"The generated-static game could not start.",L"Play",MB_OK|MB_ICONERROR);
+        const wchar_t *message=error[0]?error:L"The generated-static game could not start.";
+        bb_windows_log(message);
+        if(report_dialog) MessageBoxW(window,message,L"Play",MB_OK|MB_ICONERROR);
         return false;
     }
+    bb_windows_log(L"Game started.");
     layout_main_window(window);update_main_controls();
     set_status(L"Bubble Bobble is running at native NTSC timing. Press Escape to return to Launcher.");
     apply_game_presentation(window);
@@ -698,7 +744,7 @@ static LRESULT CALLBACK MainProc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         g_keys_button=CreateWindowW(L"BUTTON",L"&Keys",WS_CHILD|WS_VISIBLE|WS_TABSTOP,416,8,62,30,w,(HMENU)BB_TOOL_KEYS,g_instance,nullptr);
         g_fullscreen_checkbox=CreateWindowW(L"BUTTON",L"&Full screen",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_AUTOCHECKBOX,488,10,112,26,w,(HMENU)BB_TOOL_FULLSCREEN,g_instance,nullptr);
         g_auto_run_checkbox=CreateWindowW(L"BUTTON",L"Auto-&Run",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_AUTOCHECKBOX,610,10,100,26,w,(HMENU)BB_TOOL_AUTO_RUN,g_instance,nullptr);
-        g_status=CreateWindowW(L"STATIC",L"Place the Bubble Bobble (USA) .nes ROM in the portable Rom folder.",WS_CHILD|WS_VISIBLE|SS_LEFT|SS_NOPREFIX,12,48,800,24,w,nullptr,g_instance,nullptr);
+        g_status=CreateWindowW(L"STATIC",L"Place the Bubble Bobble (USA) ROM in the portable Rom folder.",WS_CHILD|WS_VISIBLE|SS_LEFT|SS_NOPREFIX,12,48,800,24,w,nullptr,g_instance,nullptr);
         for(HWND control:{g_browse_button,g_play_button,g_reset_button,g_audio_button,g_settings_button,g_keys_button,g_fullscreen_checkbox,g_auto_run_checkbox,g_status})set_control_font(control);
         update_main_controls();return 0;
     case WM_SIZE:layout_main_window(w);return 0;
@@ -753,7 +799,7 @@ static LRESULT CALLBACK MainProc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
             show_information(w,L"About Bubble Bobble",
                 L"F1 - Welcome and shortcut guide\r\n\r\n"
                 L"Bubble Bobble NES Static Recompilation\r\n\r\n"
-                L"Title: Bubble Bobble\r\nRegion: USA\r\nFile type: .nes",
+                L"Title: Bubble Bobble\r\nRegion: USA\r\nFile type: .nes or .bin",
                 520,320);return 0;
         }
         if(id==BB_CMD_EXIT){DestroyWindow(w);return 0;}
@@ -806,6 +852,24 @@ static HMENU create_main_menu(void) {
 }
 
 int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR,int) {
+    start_session_log();
+    std::wstring launch_rom;
+    if (!read_launch_rom(launch_rom)) {
+        bb_windows_log(L"Invalid launch arguments. Use --game followed by the ROM path.");
+        return 2;
+    }
+    const bool direct_launch=!launch_rom.empty();
+    if (direct_launch) {
+        char error[256]={};
+        if (!validate_rom(launch_rom,error,sizeof(error))) {
+            wchar_t message[256]={};
+            MultiByteToWideChar(CP_UTF8,0,error,-1,message,(int)BB_ARRAY_COUNT(message));
+            bb_windows_log(message);
+            return 3;
+        }
+        g_rom_path=launch_rom;
+        bb_windows_log(L"Command-line ROM validated.");
+    }
     g_instance=h;load_frontend_settings();g_main_menu=create_main_menu();
     WNDCLASSW wc{};wc.lpfnWndProc=MainProc;wc.hInstance=h;wc.lpszClassName=L"BB110Main";wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.hIcon=LoadIcon(nullptr,IDI_APPLICATION);wc.hbrBackground=(HBRUSH)GetStockObject(BLACK_BRUSH);
     if(!RegisterClassW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){MessageBoxW(nullptr,L"Windows could not register the Launcher window class.",L"Launcher startup error",MB_OK|MB_ICONERROR);return 1;}
@@ -813,13 +877,18 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR,int) {
     if(!w){MessageBoxW(nullptr,L"Windows could not create the Launcher window.",L"Launcher startup error",MB_OK|MB_ICONERROR);return 1;}
     std::wstring rom_directory=executable_directory()+L"\\Rom";
     if(!CreateDirectoryW(rom_directory.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)set_status(L"The portable Rom folder could not be created. Check folder permissions.");
-    bool rom_found=try_load_default_rom();update_main_controls();
+    bool rom_found=direct_launch || try_load_default_rom();update_main_controls();
     ShowWindow(w,SW_SHOWNORMAL);UpdateWindow(w);BringWindowToTop(w);SetForegroundWindow(w);
-    if(!GetPrivateProfileIntW(L"Frontend",L"WelcomeShown",0,g_settings_ini.c_str())) {
+    if(!direct_launch&&!GetPrivateProfileIntW(L"Frontend",L"WelcomeShown",0,g_settings_ini.c_str())) {
         WritePrivateProfileStringW(L"Frontend",L"WelcomeShown",L"1",g_settings_ini.c_str());
         show_welcome(w);
     }
-    if(rom_found&&g_auto_run)PostMessageW(w,WM_COMMAND,BB_CMD_RUN,0);
+    if(direct_launch) {
+        if (!start_live_game(w,false)) {
+            DestroyWindow(w);
+            return 4;
+        }
+    } else if(rom_found&&g_auto_run)PostMessageW(w,WM_COMMAND,BB_CMD_RUN,0);
     MSG msg{};bool running=true;
     while(running){
         HANDLE frame_timer=bb_windows_live_frame_timer();
